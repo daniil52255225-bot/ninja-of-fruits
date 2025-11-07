@@ -35,11 +35,11 @@
             position: absolute;
             pointer-events: none;
             z-index: 10;
-            transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+            transition: all 0.5s ease-out;
         }
         
         .fruit.cut {
-            transform: scale(1.3) rotate(180deg);
+            transform: scale(1.5) rotate(180deg);
             opacity: 0;
         }
         
@@ -157,7 +157,7 @@
                 this.gameActive = false;
                 this.fruits = [];
                 this.lastFruitTime = 0;
-                this.fruitInterval = 1200;
+                this.fruitInterval = 1500;
                 
                 this.setupEventListeners();
             }
@@ -176,7 +176,8 @@
                 this.timeLeft = 60;
                 this.updateUI();
                 
-                this.fruits.forEach(fruit => fruit.element.remove());
+                // Очищаем ВСЕ старые фрукты
+                document.querySelectorAll('.fruit').forEach(fruit => fruit.remove());
                 this.fruits = [];
                 
                 this.gameLoop();
@@ -192,6 +193,10 @@
             endGame() {
                 this.gameActive = false;
                 clearInterval(this.timerInterval);
+                
+                // Очищаем ВСЕ фрукты
+                document.querySelectorAll('.fruit').forEach(fruit => fruit.remove());
+                this.fruits = [];
                 
                 setTimeout(() => {
                     this.startScreen.style.display = 'flex';
@@ -215,14 +220,13 @@
             checkFruitHit(x, y) {
                 this.createSliceEffect(x, y);
                 
-                this.fruits.forEach((fruit, index) => {
-                    if (fruit.cut || !fruit.element.parentNode) return;
-                    
-                    const fruitRect = fruit.element.getBoundingClientRect();
+                // Проверяем ВСЕ фрукты на странице
+                document.querySelectorAll('.fruit:not(.cut)').forEach(fruitElement => {
+                    const fruitRect = fruitElement.getBoundingClientRect();
                     
                     if (x >= fruitRect.left && x <= fruitRect.right &&
                         y >= fruitRect.top && y <= fruitRect.bottom) {
-                        this.cutFruit(fruit, index);
+                        this.cutFruit(fruitElement);
                     }
                 });
             }
@@ -240,21 +244,17 @@
                 }, 600);
             }
             
-            cutFruit(fruit, index) {
-                fruit.cut = true;
-                fruit.element.classList.add('cut');
+            cutFruit(fruitElement) {
+                if (fruitElement.classList.contains('cut')) return;
+                
+                fruitElement.classList.add('cut');
                 this.score += 10;
                 this.updateUI();
                 
+                // Удаляем через 0.5 секунд
                 setTimeout(() => {
-                    if (fruit.element.parentNode) {
-                        fruit.element.remove();
-                    }
-                    const currentIndex = this.fruits.indexOf(fruit);
-                    if (currentIndex > -1) {
-                        this.fruits.splice(currentIndex, 1);
-                    }
-                }, 400);
+                    fruitElement.remove();
+                }, 500);
             }
             
             spawnFruit() {
@@ -272,61 +272,41 @@
                 
                 this.gameContainer.appendChild(fruit);
                 
-                // ПРОСТАЯ И НАДЁЖНАЯ АНИМАЦИЯ - без сложной математики
-                const startTime = Date.now();
-                const duration = 4000; // 4 секунды полёта
-                const startY = -100;
-                const peakY = 300;
-                const endY = -150;
+                // ПРОСТАЯ CSS АНИМАЦИЯ - никакого JavaScript для движения!
+                const animationDuration = Math.random() * 3000 + 4000; // 4-7 секунд
                 
-                const fruitObj = {
-                    element: fruit,
-                    cut: false,
-                    startTime: startTime,
-                    duration: duration,
-                    startY: startY,
-                    peakY: peakY,
-                    endY: endY,
-                    animationId: null
-                };
+                // Создаём уникальную анимацию для каждого фрукта
+                const animationName = `fruitFly-${Date.now()}-${Math.random()}`;
                 
-                // Запускаем анимацию сразу
-                this.animateFruit(fruitObj);
-                this.fruits.push(fruitObj);
-            }
-            
-            animateFruit(fruit) {
-                if (fruit.cut || !fruit.element.parentNode) return;
-                
-                const now = Date.now();
-                const elapsed = now - fruit.startTime;
-                const progress = Math.min(elapsed / fruit.duration, 1);
-                
-                if (progress >= 1) {
-                    // Фрукт завершил полёт - удаляем
-                    if (fruit.element.parentNode) {
-                        fruit.element.remove();
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes ${animationName} {
+                        0% {
+                            bottom: -100px;
+                            transform: rotate(0deg);
+                        }
+                        50% {
+                            bottom: ${Math.random() * 200 + 300}px;
+                            transform: rotate(180deg);
+                        }
+                        100% {
+                            bottom: -150px;
+                            transform: rotate(360deg);
+                        }
                     }
-                    return;
-                }
+                `;
+                document.head.appendChild(style);
                 
-                // ПРОСТОЕ движение вверх-вниз
-                let y;
-                if (progress < 0.5) {
-                    // Поднимаемся вверх
-                    y = fruit.startY + (fruit.peakY - fruit.startY) * (progress * 2);
-                } else {
-                    // Падаем вниз
-                    const fallProgress = (progress - 0.5) * 2;
-                    y = fruit.peakY + (fruit.endY - fruit.peakY) * fallProgress;
-                }
+                fruit.style.animation = `${animationName} ${animationDuration}ms linear forwards`;
                 
-                fruit.element.style.bottom = y + 'px';
-                
-                // Продолжаем анимацию
-                if (this.gameActive && !fruit.cut) {
-                    fruit.animationId = requestAnimationFrame(() => this.animateFruit(fruit));
-                }
+                // Удаляем фрукт после завершения анимации
+                setTimeout(() => {
+                    if (fruit.parentNode) {
+                        fruit.remove();
+                    }
+                    // Удаляем стиль из DOM
+                    style.remove();
+                }, animationDuration);
             }
             
             gameLoop() {
@@ -336,7 +316,7 @@
                 if (now - this.lastFruitTime > this.fruitInterval) {
                     this.spawnFruit();
                     this.lastFruitTime = now;
-                    this.fruitInterval = Math.max(800, this.fruitInterval - 1);
+                    this.fruitInterval = Math.max(1000, this.fruitInterval - 1);
                 }
                 
                 requestAnimationFrame(() => this.gameLoop());
