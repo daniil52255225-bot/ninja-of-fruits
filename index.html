@@ -35,24 +35,28 @@
             position: absolute;
             pointer-events: none;
             z-index: 10;
-            transition: transform 0.2s;
+            transition: transform 0.3s, opacity 0.3s;
         }
         
         .fruit.cut {
             opacity: 0;
-            transform: scale(0.5) rotate(360deg);
-            transition: all 0.4s ease-out;
+            transform: scale(1.5) rotate(180deg);
         }
         
-        .slice-trail {
+        .slice-effect {
             position: absolute;
-            background: rgba(255, 255, 255, 0.6);
-            height: 8px;
-            border-radius: 4px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+            border-radius: 50%;
             pointer-events: none;
             z-index: 20;
-            box-shadow: 0 0 15px #00ff88;
-            transform-origin: 0 0;
+            animation: sliceGlow 0.4s ease-out forwards;
+        }
+        
+        @keyframes sliceGlow {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
         }
         
         #ui {
@@ -131,9 +135,9 @@
         <div id="startScreen">
             <h1>🥷 NINJA OF FRUITS 🍉</h1>
             <div class="instructions">
-                Режь фрукты свайпами!<br>
+                Просто касайся фруктов!<br>
                 У тебя 60 секунд!<br>
-                ⚔️ Проведи пальцем по фрукту
+                👆 Нажимай на фрукты
             </div>
             <button id="startButton">НАЧАТЬ ИГРУ!</button>
         </div>
@@ -152,7 +156,6 @@
                 this.timeLeft = 60;
                 this.gameActive = false;
                 this.fruits = [];
-                this.slicePoints = [];
                 this.lastFruitTime = 0;
                 this.fruitInterval = 800;
                 
@@ -162,15 +165,9 @@
             setupEventListeners() {
                 this.startButton.addEventListener('click', () => this.startGame());
                 
-                // Свайп-события
-                this.gameContainer.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-                this.gameContainer.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-                this.gameContainer.addEventListener('touchend', () => this.handleTouchEnd());
-                
-                // Для ПК
-                this.gameContainer.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-                this.gameContainer.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-                this.gameContainer.addEventListener('mouseup', () => this.handleMouseUp());
+                // ПРОСТОЕ КАСАНИЕ - никаких сложных свайпов
+                this.gameContainer.addEventListener('click', (e) => this.handleClick(e));
+                this.gameContainer.addEventListener('touchstart', (e) => this.handleTouch(e));
             }
             
             startGame() {
@@ -194,153 +191,57 @@
                 this.gameActive = false;
                 clearInterval(this.timerInterval);
                 
-                // Удаляем все фрукты
                 this.fruits.forEach(fruit => fruit.element.remove());
                 this.fruits = [];
                 
-                // Показываем экран окончания
                 setTimeout(() => {
                     this.startScreen.style.display = 'flex';
                     this.startButton.textContent = 'ИГРАТЬ СНОВА!';
                     document.querySelector('.instructions').innerHTML = 
-                        `Игра окончена!<br>Твой счёт: ${this.score}<br>⚔️ Нажми чтобы играть снова`;
+                        `Игра окончена!<br>Твой счёт: ${this.score}<br>👆 Нажми чтобы играть снова`;
                 }, 1000);
             }
             
-            handleTouchStart(e) {
+            handleClick(e) {
                 if (!this.gameActive) return;
-                this.isSlicing = true;
-                this.slicePoints = [];
-                this.addSlicePoint(e.touches[0].clientX, e.touches[0].clientY);
+                this.checkFruitHit(e.clientX, e.clientY);
             }
             
-            handleTouchMove(e) {
-                if (!this.gameActive || !this.isSlicing) return;
-                this.addSlicePoint(e.touches[0].clientX, e.touches[0].clientY);
-                this.drawSliceTrail();
-                this.checkSliceCollisions();
-            }
-            
-            handleTouchEnd() {
-                this.isSlicing = false;
-                this.clearSliceTrail();
-            }
-            
-            handleMouseDown(e) {
+            handleTouch(e) {
                 if (!this.gameActive) return;
-                this.isSlicing = true;
-                this.slicePoints = [];
-                this.addSlicePoint(e.clientX, e.clientY);
+                e.preventDefault();
+                this.checkFruitHit(e.touches[0].clientX, e.touches[0].clientY);
             }
             
-            handleMouseMove(e) {
-                if (!this.gameActive || !this.isSlicing) return;
-                this.addSlicePoint(e.clientX, e.clientY);
-                this.drawSliceTrail();
-                this.checkSliceCollisions();
-            }
-            
-            handleMouseUp() {
-                this.isSlicing = false;
-                this.clearSliceTrail();
-            }
-            
-            addSlicePoint(x, y) {
-                this.slicePoints.push({ x, y, time: Date.now() });
-                // Держим только последние 10 точек для оптимизации
-                if (this.slicePoints.length > 10) {
-                    this.slicePoints.shift();
-                }
-            }
-            
-            drawSliceTrail() {
-                // Удаляем старый след
-                this.clearSliceTrail();
+            checkFruitHit(x, y) {
+                // Создаём эффект касания
+                this.createSliceEffect(x, y);
                 
-                // Рисуем линии между точками
-                for (let i = 1; i < this.slicePoints.length; i++) {
-                    const prev = this.slicePoints[i - 1];
-                    const current = this.slicePoints[i];
-                    
-                    const dx = current.x - prev.x;
-                    const dy = current.y - prev.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                    
-                    const line = document.createElement('div');
-                    line.className = 'slice-trail';
-                    line.style.left = prev.x + 'px';
-                    line.style.top = prev.y + 'px';
-                    line.style.width = distance + 'px';
-                    line.style.transform = `rotate(${angle}deg)`;
-                    
-                    this.gameContainer.appendChild(line);
-                    this.sliceTrailElements = this.sliceTrailElements || [];
-                    this.sliceTrailElements.push(line);
-                }
-            }
-            
-            clearSliceTrail() {
-                if (this.sliceTrailElements) {
-                    this.sliceTrailElements.forEach(el => el.remove());
-                    this.sliceTrailElements = [];
-                }
-            }
-            
-            checkSliceCollisions() {
-                if (this.slicePoints.length < 2) return;
-                
-                // Проверяем пересечение с каждым фруктом
+                // Проверяем попадание по фруктам
                 this.fruits.forEach((fruit, index) => {
-                    if (fruit.cut || !fruit.element.parentNode) return;
+                    if (fruit.cut) return;
                     
                     const fruitRect = fruit.element.getBoundingClientRect();
-                    const fruitCenter = {
-                        x: fruitRect.left + fruitRect.width / 2,
-                        y: fruitRect.top + fruitRect.height / 2
-                    };
                     
-                    // Проверяем пересечение линии с фруктом
-                    for (let i = 1; i < this.slicePoints.length; i++) {
-                        const prev = this.slicePoints[i - 1];
-                        const current = this.slicePoints[i];
-                        
-                        if (this.pointToLineDistance(fruitCenter, prev, current) < fruitRect.width / 2) {
-                            this.cutFruit(fruit, index);
-                            break;
-                        }
+                    // ПРОСТАЯ ПРОВЕРКА: касание внутри фрукта
+                    if (x >= fruitRect.left && x <= fruitRect.right &&
+                        y >= fruitRect.top && y <= fruitRect.bottom) {
+                        this.cutFruit(fruit, index);
                     }
                 });
             }
             
-            pointToLineDistance(point, lineStart, lineEnd) {
-                const A = point.x - lineStart.x;
-                const B = point.y - lineStart.y;
-                const C = lineEnd.x - lineStart.x;
-                const D = lineEnd.y - lineStart.y;
+            createSliceEffect(x, y) {
+                const effect = document.createElement('div');
+                effect.className = 'slice-effect';
+                effect.style.left = (x - 50) + 'px';
+                effect.style.top = (y - 50) + 'px';
                 
-                const dot = A * C + B * D;
-                const lenSq = C * C + D * D;
-                let param = -1;
+                this.gameContainer.appendChild(effect);
                 
-                if (lenSq !== 0) param = dot / lenSq;
-                
-                let xx, yy;
-                
-                if (param < 0) {
-                    xx = lineStart.x;
-                    yy = lineStart.y;
-                } else if (param > 1) {
-                    xx = lineEnd.x;
-                    yy = lineEnd.y;
-                } else {
-                    xx = lineStart.x + param * C;
-                    yy = lineStart.y + param * D;
-                }
-                
-                const dx = point.x - xx;
-                const dy = point.y - yy;
-                return Math.sqrt(dx * dx + dy * dy);
+                setTimeout(() => {
+                    effect.remove();
+                }, 400);
             }
             
             cutFruit(fruit, index) {
@@ -354,7 +255,7 @@
                         fruit.element.remove();
                     }
                     this.fruits.splice(index, 1);
-                }, 400);
+                }, 300);
             }
             
             spawnFruit() {
@@ -366,7 +267,7 @@
                 fruit.textContent = fruitEmoji;
                 fruit.style.fontSize = Math.random() * 30 + 40 + 'px';
                 
-                // Начальная позиция внизу экрана
+                // Начальная позиция внизу
                 const startX = Math.random() * (window.innerWidth - 100) + 50;
                 fruit.style.left = startX + 'px';
                 fruit.style.bottom = '-100px';
@@ -377,11 +278,11 @@
                     element: fruit,
                     cut: false,
                     startTime: Date.now(),
-                    duration: Math.random() * 2000 + 2000, // 2-4 секунды
+                    duration: Math.random() * 2000 + 2000,
                     startX: startX,
                     startY: -100,
-                    peakY: Math.random() * 200 + 300, // Пиковая высота
-                    endY: -150 // Улетает за верх экрана
+                    peakY: Math.random() * 200 + 300,
+                    endY: -150
                 };
                 
                 this.fruits.push(fruitObj);
@@ -402,17 +303,14 @@
                     const progress = Math.min(elapsed / fruit.duration, 1);
                     
                     if (progress >= 1) {
-                        // Фрукт улетел за экран
                         fruit.element.remove();
                         this.fruits.splice(i, 1);
                     } else {
-                        // Параболическое движение: вверх, потом вниз
+                        // Простое движение вверх-вниз
                         let y;
                         if (progress < 0.5) {
-                            // Поднимаемся вверх
                             y = fruit.startY + (fruit.peakY - fruit.startY) * (progress * 2);
                         } else {
-                            // Падаем вниз
                             const fallProgress = (progress - 0.5) * 2;
                             y = fruit.peakY + (fruit.endY - fruit.peakY) * fallProgress;
                         }
@@ -429,7 +327,6 @@
                 if (now - this.lastFruitTime > this.fruitInterval) {
                     this.spawnFruit();
                     this.lastFruitTime = now;
-                    // Постепенно увеличиваем частоту появления фруктов
                     this.fruitInterval = Math.max(400, this.fruitInterval - 3);
                 }
                 
@@ -443,7 +340,6 @@
             }
         }
         
-        // Запуск игры когда страница загрузится
         window.addEventListener('load', () => {
             new FruitNinjaGame();
         });
