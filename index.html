@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ninja of Fruits</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #0f3460, #1a1a2e);
+            overflow: hidden;
+        }
+        
+        .fruit {
+            position: absolute;
+            transition: transform 0.1s;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .fruit.cut {
+            opacity: 0;
+            transform: scale(0.8) rotate(180deg);
+            transition: all 0.3s ease-out;
+        }
+        
+        .slice-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            height: 4px;
+            border-radius: 2px;
+            pointer-events: none;
+            z-index: 20;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            z-index: 100;
+            text-align: center;
+        }
+        
+        #score {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff88;
+            text-shadow: 0 0 20px #00ff88;
+            margin-bottom: 10px;
+        }
+        
+        #timer {
+            font-size: 24px;
+            color: #ff6b6b;
+            text-shadow: 0 0 10px #ff6b6b;
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        #startButton {
+            padding: 20px 40px;
+            font-size: 28px;
+            background: linear-gradient(45deg, #ff6b6b, #ffd93d);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            margin-top: 30px;
+            box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+        }
+        
+        h1 {
+            font-size: 52px;
+            color: #00ff88;
+            text-shadow: 0 0 30px #00ff88;
+            margin-bottom: 20px;
+        }
+        
+        .instructions {
+            text-align: center;
+            color: #ccc;
+            margin-bottom: 30px;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div id="score">0</div>
+            <div id="timer">60</div>
+        </div>
+        
+        <div id="startScreen">
+            <h1>🥷 NINJA OF FRUITS 🍉</h1>
+            <div class="instructions">
+                Режь фрукты свайпами!<br>
+                У тебя 60 секунд!<br>
+                ⚔️ Проведи пальцем по фрукту
+            </div>
+            <button id="startButton">НАЧАТЬ ИГРУ!</button>
+        </div>
+    </div>
+
+    <script>
+        class FruitNinjaGame {
+            constructor() {
+                this.gameContainer = document.getElementById('gameContainer');
+                this.scoreElement = document.getElementById('score');
+                this.timerElement = document.getElementById('timer');
+                this.startScreen = document.getElementById('startScreen');
+                this.startButton = document.getElementById('startButton');
+                
+                this.score = 0;
+                this.timeLeft = 60;
+                this.gameActive = false;
+                this.fruits = [];
+                this.sliceLines = [];
+                this.lastFruitTime = 0;
+                this.fruitInterval = 800;
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                this.startButton.addEventListener('click', () => this.startGame());
+                
+                // Свайп-события
+                this.gameContainer.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+                this.gameContainer.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+                this.gameContainer.addEventListener('touchend', () => this.handleTouchEnd());
+                
+                // Для ПК
+                this.gameContainer.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.gameContainer.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.gameContainer.addEventListener('mouseup', () => this.handleMouseUp());
+            }
+            
+            startGame() {
+                this.startScreen.style.display = 'none';
+                this.gameActive = true;
+                this.score = 0;
+                this.timeLeft = 60;
+                this.updateUI();
+                
+                this.gameLoop();
+                this.timerInterval = setInterval(() => {
+                    this.timeLeft--;
+                    this.updateUI();
+                    if (this.timeLeft <= 0) {
+                        this.endGame();
+                    }
+                }, 1000);
+            }
+            
+            endGame() {
+                this.gameActive = false;
+                clearInterval(this.timerInterval);
+                
+                // Удаляем все фрукты
+                this.fruits.forEach(fruit => fruit.element.remove());
+                this.fruits = [];
+                
+                // Показываем экран окончания
+                setTimeout(() => {
+                    this.startScreen.style.display = 'flex';
+                    this.startButton.textContent = 'ИГРАТЬ СНОВА!';
+                    document.querySelector('.instructions').innerHTML = 
+                        `Игра окончена!<br>Твой счёт: ${this.score}<br>⚔️ Нажми чтобы играть снова`;
+                }, 1000);
+            }
+            
+            handleTouchStart(e) {
+                if (!this.gameActive) return;
+                this.isSlicing = true;
+                this.createSliceLine(e.touches[0].clientX, e.touches[0].clientY);
+            }
+            
+            handleTouchMove(e) {
+                if (!this.gameActive || !this.isSlicing) return;
+                this.updateSliceLine(e.touches[0].clientX, e.touches[0].clientY);
+                this.checkSliceCollisions();
+            }
+            
+            handleTouchEnd() {
+                this.isSlicing = false;
+                this.removeSliceLine();
+            }
+            
+            handleMouseDown(e) {
+                if (!this.gameActive) return;
+                this.isSlicing = true;
+                this.createSliceLine(e.clientX, e.clientY);
+            }
+            
+            handleMouseMove(e) {
+                if (!this.gameActive || !this.isSlicing) return;
+                this.updateSliceLine(e.clientX, e.clientY);
+                this.checkSliceCollisions();
+            }
+            
+            handleMouseUp() {
+                this.isSlicing = false;
+                this.removeSliceLine();
+            }
+            
+            createSliceLine(x, y) {
+                this.sliceLine = document.createElement('div');
+                this.sliceLine.className = 'slice-line';
+                this.sliceLine.style.left = x + 'px';
+                this.sliceLine.style.top = y + 'px';
+                this.sliceLine.style.width = '0px';
+                this.gameContainer.appendChild(this.sliceLine);
+                
+                this.lastSlicePoint = { x, y };
+            }
+            
+            updateSliceLine(x, y) {
+                if (!this.sliceLine) return;
+                
+                const dx = x - this.lastSlicePoint.x;
+                const dy = y - this.lastSlicePoint.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                
+                this.sliceLine.style.width = distance + 'px';
+                this.sliceLine.style.transform = `rotate(${angle}deg)`;
+                this.sliceLine.style.transformOrigin = '0 0';
+                
+                this.lastSlicePoint = { x, y };
+            }
+            
+            removeSliceLine() {
+                if (this.sliceLine) {
+                    this.sliceLine.remove();
+                    this.sliceLine = null;
+                }
+            }
+            
+            checkSliceCollisions() {
+                if (!this.sliceLine) return;
+                
+                const sliceRect = this.sliceLine.getBoundingClientRect();
+                
+                this.fruits.forEach((fruit, index) => {
+                    if (fruit.cut) return;
+                    
+                    const fruitRect = fruit.element.getBoundingClientRect();
+                    
+                    // Простая проверка пересечения
+                    if (this.rectIntersect(sliceRect, fruitRect)) {
+                        this.cutFruit(fruit, index);
+                    }
+                });
+            }
+            
+            rectIntersect(rect1, rect2) {
+                return !(rect1.right < rect2.left || 
+                        rect1.left > rect2.right || 
+                        rect1.bottom < rect2.top || 
+                        rect1.top > rect2.bottom);
+            }
+            
+            cutFruit(fruit, index) {
+                fruit.cut = true;
+                fruit.element.classList.add('cut');
+                this.score += 10;
+                this.updateUI();
+                
+                setTimeout(() => {
+                    fruit.element.remove();
+                    this.fruits.splice(index, 1);
+                }, 300);
+            }
+            
+            spawnFruit() {
+                const fruits = ['🍎', '🍊', '🍉', '🍓', '🍌'];
+                const fruitEmoji = fruits[Math.floor(Math.random() * fruits.length)];
+                
+                const fruit = document.createElement('div');
+                fruit.className = 'fruit';
+                fruit.textContent = fruitEmoji;
+                fruit.style.fontSize = Math.random() * 30 + 40 + 'px';
+                
+                // Случайная позиция внизу экрана
+                const startX = Math.random() * (window.innerWidth - 100) + 50;
+                fruit.style.left = startX + 'px';
+                fruit.style.bottom = '-100px';
+                
+                this.gameContainer.appendChild(fruit);
+                
+                // Анимация полёта
+                const endY = -150;
+                const duration = Math.random() * 2000 + 2000; // 2-4 секунды
+                
+                const fruitObj = {
+                    element: fruit,
+                    cut: false,
+                    startTime: Date.now(),
+                    duration: duration,
+                    startX: startX,
+                    endX: startX + (Math.random() - 0.5) * 200 // Немного смещения по X
+                };
+                
+                this.fruits.push(fruitObj);
+            }
+            
+            updateFruits() {
+                const now = Date.now();
+                this.fruits.forEach((fruit, index) => {
+                    if (fruit.cut) return;
+                    
+                    const elapsed = now - fruit.startTime;
+                    const progress = Math.min(elapsed / fruit.duration, 1);
+                    
+                    if (progress >= 1) {
+                        // Фрукт улетел за экран
+                        fruit.element.remove();
+                        this.fruits.splice(index, 1);
+                    } else {
+                        // Анимация полёта (парабола)
+                        const x = fruit.startX + (fruit.endX - fruit.startX) * progress;
+                        const y = -100 + (window.innerHeight + 200) * (1 - progress);
+                        
+                        fruit.element.style.left = x + 'px';
+                        fruit.element.style.bottom = y + 'px';
+                    }
+                });
+            }
+            
+            gameLoop() {
+                if (!this.gameActive) return;
+                
+                const now = Date.now();
+                if (now - this.lastFruitTime > this.fruitInterval) {
+                    this.spawnFruit();
+                    this.lastFruitTime = now;
+                    // Постепенно увеличиваем частоту появления фруктов
+                    this.fruitInterval = Math.max(300, this.fruitInterval - 5);
+                }
+                
+                this.updateFruits();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            updateUI() {
+                this.scoreElement.textContent = this.score;
+                this.timerElement.textContent = this.timeLeft;
+            }
+        }
+        
+        // Запуск игры когда страница загрузится
+        window.addEventListener('load', () => {
+            new FruitNinjaGame();
+        });
+    </script>
+</body>
+</html>
