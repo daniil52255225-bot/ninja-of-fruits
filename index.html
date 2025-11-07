@@ -334,3 +334,29 @@
     </script>
 </body>
 </html>
+<div id="version">v1.0</div>
+
+<style>
+    #version {
+        position: fixed;
+        bottom: 15px;
+        right: 15px;
+        font-size: 16px;
+        font-weight: bold;
+        background: linear-gradient(45deg, #ff0000, #ff8000, #ffff00, #00ff00, #00ffff, #0000ff, #8000ff, #ff00ff);
+        background-size: 400% 400%;
+        animation: rainbow 3s ease infinite;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding: 8px 15px;
+        border-radius: 20px;
+        border: 2px solid rgba(255,255,255,0.3);
+        box-shadow: 0 0 15px rgba(255,255,255,0.2);
+    }
+    
+    @keyframes rainbow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+</style>
